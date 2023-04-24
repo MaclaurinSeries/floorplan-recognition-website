@@ -1,0 +1,39 @@
+{% load static %}
+
+@keyframes animation-floating {
+  from {
+    transform: translateY(0vh);
+  }
+  to {
+    transform: translateY(-50vh);
+  }
+}
+
+#bg-image {
+  background-image: url('{% static "asset/bg2.svg" %}');
+  background-size: contain;
+  background-position-x: center;
+  background-repeat: repeat-y;
+
+  height: 300%;
+
+  animation-name: animation-floating;
+  animation-timing-function: ease-in-out;
+  animation-duration: 20s;
+  animation-iteration-count: infinite;
+  animation-direction: alternate-reverse;
+}
+
+#panel-holder::-webkit-scrollbar{
+  display: none;
+}
+
+.image-panel {
+  width: 40vw;
+  height: 40vw;
+  color: transparent;
+  border: 0;
+  background: url(https://cdn.cssauthor.com/wp-content/uploads/2018/06/Bouncy-Preloader.gif?strip=all&lossy=1&resize=300%2C225&ssl=1) #21242D;
+  background-repeat: no-repeat;
+  background-position: center;
+}
