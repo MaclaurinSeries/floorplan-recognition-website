@@ -8,10 +8,15 @@ import numpy as np
 import re
 import pickle
 
+from torch_geometric.data import Data
+from .app import HouseConfig as Mapper
+
 from .app.main import (
     roi_detection,
     wall_segmentation,
-    symbol_detection
+    symbol_detection,
+    room_clasification,
+    spatial_classification
 )
 from .app.utils import (
     Image2Base64,
@@ -41,7 +46,12 @@ PROCESS_ID = {
         3: '(post..) graph construction'
     },
     'D': {
-        0: 'Room Classification'
+        0: 'Deep Floor Plan',
+        1: 'Text Detection',
+        2: 'Room Classification'
+    },
+    'E': {
+        0: 'Floor Result'
     }
 }
 
@@ -56,6 +66,7 @@ class PredictionConsumer(WebsocketConsumer):
     def receive(self, text_data):
         json_data = json.loads(text_data)
         ID = json_data["ID"]
+        gnn = json_data["gnn"]
 
         images = [
             Base642Image(json_data["image_data"])
@@ -66,6 +77,7 @@ class PredictionConsumer(WebsocketConsumer):
 
         self.log('A1', {
             'name': 'roi-detection',
+            'floor': len(roi_results[0]),
             'preds': roi_results[0]
         })
 
@@ -87,21 +99,55 @@ class PredictionConsumer(WebsocketConsumer):
         })
         wall_segment_results = self.wallSegmentationHandler(images_divided)
 
-        with open('segment.pkl', 'wb') as f:
-            pickle.dump(wall_segment_results, f)
-        with open('symbol.pkl', 'wb') as f:
-            pickle.dump(symbol_detection_results, f)
+        # with open('segment.pkl', 'wb') as f:
+        #     pickle.dump(wall_segment_results, f)
+        # with open('symbol.pkl', 'wb') as f:
+        #     pickle.dump(symbol_detection_results, f)
 
         post_processor = WallPostProcessing(self)
-        for segment_results,symbol_results in zip(wall_segment_results, symbol_detection_results):
-            for floor_segment,symbol_bbox in zip(segment_results, symbol_results):
-                graphs, coords, coord_edges = post_processor(floor_segment, symbol_bbox)
+        for segment_results,symbol_results,images in zip(wall_segment_results, symbol_detection_results, images_divided):
+            for floor_idx,(floor_segment,symbol_bbox,image) in enumerate(zip(segment_results, symbol_results, images)):
+                floor_idx += 1
+                graph, room_poly, _, _ = post_processor(floor_segment, symbol_bbox, floor_idx)
+                self.log('D0', {
+                    'name': 'graph-construction',
+                    'floor': floor_idx,
+                    'room_poly': room_poly
+                })
+                print(room_poly)
+                x_cnn,res = spatial_classification(image, room_poly)
+                self.log('D1', self.format_image_data(
+                    name='deep-floor-plan',
+                    floor=floor_idx,
+                    image=res
+                ))
+                # text detection
+                text_bounding_box, x_text = None, None
+                self.log('D2', {
+                    'name': 'text-detection',
+                    'floor': floor_idx,
+                    'preds': text_bounding_box
+                })
+                preds = self.gnnHandler(graph, gnn, x_cnn, x_text)
+                print(np.array(Mapper.rooms)[preds.argmax(-1)])
+                self.log('E0', {
+                    'name': 'room-classification',
+                    'floor': floor_idx,
+                    'preds': preds.argmax(-1),
+                    'labels': Mapper.rooms
+                })
 
         self.disconnect(0)
 
 
     def roiHandler(self, images: list[Image.Image]):
         return roi_detection(images)
+    
+    
+    def gnnHandler(self, graph: Data, model_name, x_cnn, x_text):
+        # x_compose = (x_cnn + x_text) / 2
+        x_compose = x_cnn / 2
+        return room_clasification(graph, x_compose, model_name)
 
 
     def wallSegmentationHandler(self, images: list[list[Image.Image]]):
@@ -113,7 +159,6 @@ class PredictionConsumer(WebsocketConsumer):
         results = [
             seg_results[pref_sum: pref_sum + image_CNT[i]] for i,pref_sum in enumerate(image_CNT_pref_sum)
         ]
-
 
         return results
     
@@ -151,7 +196,7 @@ class PredictionConsumer(WebsocketConsumer):
         }, cls=NumpyEncoder))
 
     
-    def format_image_data(self, name, image):
+    def format_image_data(self, name, floor, image):
         if image.dtype.kind == "f" or image.dtype.kind == "b":
             image = (np.clip(image, a_min=0, a_max=1) * 255)
         image = image.astype(np.uint8)
@@ -162,6 +207,7 @@ class PredictionConsumer(WebsocketConsumer):
 
         return {
             'name': name,
+            'floor': floor,
             'image': Image2Base64(
                 Image.fromarray(image, mode)
             )

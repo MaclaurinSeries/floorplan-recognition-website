@@ -8,11 +8,6 @@ let FloorplanRecognition = function (ID, current_time, components) {
     load_screen_id,
     load_bar_id,
     load_info_id,
-    original_image_panel_id,
-    roi_image_panel_id,
-    boundary_image_panel_id,
-    symbol_image_panel_id,
-    prediction_image_panel_id,
   } = components;
 
   this.ID = ID;
@@ -33,13 +28,9 @@ let FloorplanRecognition = function (ID, current_time, components) {
   this.load_bar = document.getElementById(load_bar_id);
   this.load_info = document.getElementById(load_info_id);
 
-  this.panel = {
-    original_image: document.getElementById(original_image_panel_id),
-    roi_image: document.getElementById(roi_image_panel_id),
-    boundary_image: document.getElementById(boundary_image_panel_id),
-    symbol_image: document.getElementById(symbol_image_panel_id),
-    prediction_image: document.getElementById(prediction_image_panel_id),
-  };
+  this.displayed_floor = 1;
+  this.floor_cnt = 1;
+  this.room_poly = {};
 
   this.input_file.onchange = () => {
     let filename = String(this.input_file.value);
@@ -87,6 +78,9 @@ let FloorplanRecognition = function (ID, current_time, components) {
     this.load_bar.style.opacity = "1.0";
     this.load_info.style.opacity = "1.0";
 
+    for (const img of document.getElementsByTagName("img")) {
+      img.src = "";
+    }
     await this.sendImage();
 
     const load_bar_promise = this.load_bar.animate(
@@ -115,11 +109,12 @@ let FloorplanRecognition = function (ID, current_time, components) {
       console.log("[open] Connection established");
       console.log(`Sending image to server ${endpoint}`);
 
-      this.putImage("original-image", this.image);
+      this.putImage(0, "original-image", this.image);
 
       socket.send(
         JSON.stringify({
           ID: this.ID,
+          gnn: "graph-sage-jk",
           image_data: this.image,
         })
       );
@@ -136,75 +131,242 @@ let FloorplanRecognition = function (ID, current_time, components) {
     });
   };
 
+  this.setFloor = (floor) => {
+    floor = parseInt(floor);
+
+    for (let i = 2; i <= this.floor_cnt; i++) {
+      document.getElementById(`btn-Floor-${i}`).remove();
+      document.getElementById(`Floor-${i}`).remove();
+    }
+    for (const img in document.getElementsByTagName("img")) {
+      img.src = "";
+    }
+    for (let i = 2; i <= floor; i++) {
+      const btn = document.getElementById(`btn-Floor-1`);
+      const div = document.getElementById(`Floor-1`);
+
+      const div_clone = div.cloneNode(true);
+      const btn_clone = btn.cloneNode(true);
+
+      div_clone.setAttribute("id", `Floor-${i}`);
+      btn_clone.setAttribute("id", `btn-Floor-${i}`);
+      btn_clone.innerHTML = `Floor-${i}`;
+
+      div.parentNode.appendChild(div_clone);
+      btn.parentNode.appendChild(btn_clone);
+    }
+
+    for (let i = 1; i <= floor; i++) {
+      document
+        .getElementById(`btn-Floor-${i}`)
+        .addEventListener("click", this.changeFloor(i));
+    }
+    this.floor_cnt = floor;
+    this.changeFloor(1)();
+  };
+
+  this.changeFloor = (floor_idx) => {
+    return (event) => {
+      for (let i = 1; i <= this.floor_cnt; i++) {
+        const div = document.getElementById(`Floor-${i}`);
+        const btn = document.getElementById(`btn-Floor-${i}`);
+        if (i === floor_idx) {
+          btn.style.border = "1px solid white";
+          div.style.display = "inline";
+        } else {
+          btn.style.border = "none";
+          div.style.display = "none";
+        }
+      }
+    };
+  };
+
   this.messageHandler = (PID, percentage, info, data) => {
-    const image_pid = ["C1", "C2"];
+    const image_pid = ["C1", "C2", "D1"];
 
     if (image_pid.includes(PID)) {
-      const { name, image } = data;
-      this.putImage(name, image);
+      const { name, floor, image } = data;
+      this.putImage(floor, name, image);
     } else if (PID == "A1") {
-      const { name, preds } = data;
+      // ini hasil roi detection
+      const { name, floor, preds } = data;
+      this.setFloor(floor);
 
-      let picked = preds[0];
+      let picked = preds.map((x) => x["polygon_n"]);
 
       const polygon = {
-        roi: [picked["polygon_n"]],
+        roi: picked,
       };
 
-      this.putImage("roi-detection", this.image, null, polygon);
+      this.putImage(0, "roi-detection", this.image, null, polygon);
 
-      let x = picked["polygon_n"].map((e) => e[0]);
-      let y = picked["polygon_n"].map((e) => e[1]);
-      this.crop_size = [
-        Math.min(...x),
-        Math.min(...y),
-        Math.max(...x),
-        Math.max(...y),
-      ];
-    } else if (PID == "C0") {
-      const { name, preds } = data;
-      let picked = preds[0];
-
-      const polygon = {};
-      for (let pred of picked) {
-        if (!(pred["names"] in polygon)) {
-          polygon[pred["names"]] = [];
-        }
-        let bboxn = pred["bounding_box_n"];
-        let bbox = [
-          [bboxn[0], bboxn[1]],
-          [bboxn[2], bboxn[1]],
-          [bboxn[2], bboxn[3]],
-          [bboxn[0], bboxn[3]],
-        ];
-        polygon[pred["names"]].push(bbox);
+      this.crop_size = [];
+      for (let i = 0; i < this.floor_cnt; i++) {
+        let x = picked[i].map((e) => e[0]);
+        let y = picked[i].map((e) => e[1]);
+        this.crop_size.push([
+          Math.min(...x),
+          Math.min(...y),
+          Math.max(...x),
+          Math.max(...y),
+        ]);
       }
+    } else if (PID == "C0") {
+      // ini hasil symbol detection
+      const { name, preds } = data;
+      for (let i = 0; i < this.floor_cnt; i++) {
+        let picked = preds[i];
 
-      this.putImage(
-        "symbol-detection",
-        this.image,
-        null,
-        polygon,
-        this.crop_size
-      );
+        const polygon = {};
+        for (let pred of picked) {
+          if (!(pred["names"] in polygon)) {
+            polygon[pred["names"]] = [];
+          }
+          let bboxn = pred["bounding_box_n"];
+          let bbox = [
+            [bboxn[0], bboxn[1]],
+            [bboxn[2], bboxn[1]],
+            [bboxn[2], bboxn[3]],
+            [bboxn[0], bboxn[3]],
+          ];
+          polygon[pred["names"]].push(bbox);
+        }
+
+        this.putImage(
+          i + 1,
+          "symbol-detection",
+          this.image,
+          null,
+          polygon,
+          this.crop_size[i]
+        );
+      }
     } else if (PID == "C3") {
-      const { name, coords, edges } = data;
+      const { name, floor, coords, edges, res } = data;
 
       this.putImage(
+        floor,
         "vectorization",
         this.image,
         null,
         {
           wall: [
-            edges.map((x) => [
-              [coords[2 * x[0] + 1], coords[2 * x[0]]],
-              [coords[2 * x[1] + 1], coords[2 * x[1]]],
-              x[2],
-            ]),
+            edges.map((x) => {
+              return [
+                [
+                  coords[2 * x["vertices"][0] + 1],
+                  coords[2 * x["vertices"][0]],
+                ],
+                [
+                  coords[2 * x["vertices"][1] + 1],
+                  coords[2 * x["vertices"][1]],
+                ],
+                x["thickness_meter"],
+              ];
+            }),
+          ],
+          door: [
+            edges
+              .map((x) => {
+                let x1 = coords[2 * x["vertices"][0] + 1];
+                let y1 = coords[2 * x["vertices"][0]];
+                let x2 = coords[2 * x["vertices"][1] + 1];
+                let y2 = coords[2 * x["vertices"][1]];
+
+                let doors = x["doors"].map((door) => {
+                  let xx = door["projection"] * (x2 - x1) + x1;
+                  let yy = door["projection"] * (y2 - y1) + y1;
+
+                  let vector = [x2 - x1, y2 - y1];
+
+                  return [
+                    [xx, yy],
+                    vector,
+                    door["length"],
+                    x["thickness_meter"],
+                  ];
+                });
+
+                return doors;
+              })
+              .filter((x) => x.length > 0)
+              .map((x) => x[0]),
+          ],
+          window: [
+            edges
+              .map((x) => {
+                let x1 = coords[2 * x["vertices"][0] + 1];
+                let y1 = coords[2 * x["vertices"][0]];
+                let x2 = coords[2 * x["vertices"][1] + 1];
+                let y2 = coords[2 * x["vertices"][1]];
+
+                let doors = x["windows"].map((door) => {
+                  let xx = door["projection"] * (x2 - x1) + x1;
+                  let yy = door["projection"] * (y2 - y1) + y1;
+
+                  let vector = [x2 - x1, y2 - y1];
+                  let norm = Math.sqrt(
+                    vector[0] * vector[0] + vector[1] * vector[1]
+                  );
+                  vector[0] /= norm;
+                  vector[1] /= norm;
+
+                  return [
+                    [xx, yy],
+                    vector,
+                    door["length"],
+                    x["thickness_meter"],
+                  ];
+                });
+
+                return doors;
+              })
+              .filter((x) => x.length > 0)
+              .map((x) => x[0]),
           ],
         },
-        this.crop_size,
-        true
+        this.crop_size[floor - 1],
+        true,
+        res["ppm"] / res["shape"][0]
+      );
+    } else if (PID == "D0") {
+      const { name, floor, room_poly } = data;
+      const rooms = [];
+      for (const room of room_poly) {
+        const transpose = [];
+        for (let i = 0; i < room[0].length; i++) {
+          transpose.push([room[1][i], room[0][i]]);
+        }
+        rooms.push({
+          polygon: transpose,
+          pred: -1,
+        });
+      }
+      this.room_poly[floor] = rooms;
+    } else if (PID == "E0") {
+      const { name, floor, preds, labels } = data;
+
+      this.labels = labels;
+      const poly = {};
+
+      for (let i = 0; i < preds.length; i++) {
+        const obj = this.room_poly[floor][i].polygon;
+        this.room_poly[floor][i].pred = preds[i];
+
+        if (!poly[preds[i]]) {
+          poly[preds[i]] = [];
+        }
+
+        poly[preds[i]].push(obj);
+      }
+
+      this.putImage(
+        floor,
+        "room-classification",
+        this.image,
+        null,
+        poly,
+        this.crop_size[floor - 1]
       );
     }
   };
@@ -268,12 +430,14 @@ let FloorplanRecognition = function (ID, current_time, components) {
   };
 
   this.putImage = (
-    id,
+    floor,
+    name,
     image = null,
     fill = null,
     polygon = null,
     crop = null,
-    line_independence = false
+    line_independence = false,
+    ppm = null
   ) => {
     let img = document.createElement("img");
     img.onload = (e) => {
@@ -297,6 +461,7 @@ let FloorplanRecognition = function (ID, current_time, components) {
       }
       let stx = (vw40 - neww) / 2,
         sty = (vw40 - newh) / 2;
+      ppm = newh * ppm;
 
       ctx.fillStyle = "rgb(127, 127, 127)";
       if (fill !== null) {
@@ -329,35 +494,63 @@ let FloorplanRecognition = function (ID, current_time, components) {
       ctx.drawImage(img, x1, y1, x2 - x1, y2 - y1, stx, sty, neww, newh);
 
       if (polygon !== null) {
-        let i = 0;
+        let color_index = 0;
+        let first_clear = true;
         for (const cls in polygon) {
-          const rgb = commonColors[i];
-          i++;
+          const rgb = commonColors[color_index];
+          color_index++;
 
           let fill_color = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.3)`;
           let stroke_color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 
           for (let i = 0; i < polygon[cls].length; i++) {
             const poly = polygon[cls][i];
-            let first = true;
-            if (line_independence) {
-              ctx.fillStyle = "rgb(127, 127, 127)";
-              ctx.fillRect(stx, sty, neww, newh);
-              for (let [u, v, w] of poly) {
-                u[0] = u[0] * neww + stx;
-                u[1] = u[1] * newh + sty;
-                v[0] = v[0] * neww + stx;
-                v[1] = v[1] * newh + sty;
 
-                ctx.beginPath();
-                ctx.moveTo(u[0], u[1]);
-                ctx.lineTo(v[0], v[1]);
-                ctx.closePath();
-                ctx.strokeStyle = "#ffffff";
-                ctx.lineWidth = w;
-                ctx.stroke();
+            if (line_independence) {
+              if (first_clear) {
+                ctx.fillStyle = "rgb(127, 127, 127)";
+                ctx.fillRect(0, 0, vw40, vw40);
+                first_clear = false;
+              }
+              if (poly[0].length == 3) {
+                for (let [u, v, w] of poly) {
+                  u[0] = u[0] * neww + stx;
+                  u[1] = u[1] * newh + sty;
+                  v[0] = v[0] * neww + stx;
+                  v[1] = v[1] * newh + sty;
+
+                  ctx.beginPath();
+                  ctx.moveTo(u[0], u[1]);
+                  ctx.lineTo(v[0], v[1]);
+                  ctx.closePath();
+                  ctx.strokeStyle = "#ffffff";
+                  ctx.lineWidth = w * ppm;
+                  ctx.stroke();
+                }
+              } else {
+                for (let [u, v, l, w] of poly) {
+                  u[0] = u[0] * neww + stx;
+                  u[1] = u[1] * newh + sty;
+
+                  v[0] *= neww;
+                  v[1] *= newh;
+                  let norm = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+                  v[0] /= norm;
+                  v[1] /= norm;
+
+                  let half = (l * ppm) / 2;
+
+                  ctx.beginPath();
+                  ctx.moveTo(u[0] - half * v[0], u[1] - half * v[1]);
+                  ctx.lineTo(u[0] + half * v[0], u[1] + half * v[1]);
+                  ctx.closePath();
+                  ctx.strokeStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+                  ctx.lineWidth = w * ppm;
+                  ctx.stroke();
+                }
               }
             } else {
+              let first = true;
               ctx.beginPath();
               for (let [u, v] of poly) {
                 u = u * neww + stx;
@@ -380,7 +573,12 @@ let FloorplanRecognition = function (ID, current_time, components) {
         }
       }
 
-      document.getElementById(id).src = canvas.toDataURL();
+      if (floor > 0) {
+        const div = document.getElementById(`Floor-${floor}`);
+        div.getElementsByClassName(name)[0].src = canvas.toDataURL();
+      } else {
+        document.getElementsByName(name)[0].src = canvas.toDataURL();
+      }
     };
     img.src = image;
   };
