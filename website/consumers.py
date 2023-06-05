@@ -1,28 +1,34 @@
 import json
 import base64
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
-import re
+import re, os
 import pickle
 
 from torch_geometric.data import Data
 from .app import HouseConfig as Mapper
+from copy import deepcopy
+
+from shapely.geometry import Polygon
 
 from .app.main import (
     roi_detection,
     wall_segmentation,
     symbol_detection,
     room_clasification,
-    spatial_classification
+    spatial_classification,
+    text_detection
 )
 from .app.utils import (
     Image2Base64,
     Base642Image,
     ImageCropper,
-    NumpyEncoder
+    NumpyEncoder,
+    test
 )
 from .app.segmentationPostProcess import (
     WallPostProcessing
@@ -55,6 +61,22 @@ PROCESS_ID = {
     }
 }
 
+COLOR = [
+  (0, 255, 0),
+  (255, 0, 0),
+  (0, 0, 255),
+  (240, 180, 60),
+  (180, 240, 120),
+  (120, 60, 180),
+  (60, 120, 240),
+  (180, 60, 240), 
+  (240, 120, 180), 
+  (60, 180, 120), 
+  (120, 240, 60), 
+  (60, 240, 180),
+  (120, 180, 240)
+]
+
 
 class PredictionConsumer(WebsocketConsumer):
     def connect(self):
@@ -64,78 +86,157 @@ class PredictionConsumer(WebsocketConsumer):
         pass
 
     def receive(self, text_data):
-        json_data = json.loads(text_data)
-        ID = json_data["ID"]
-        gnn = json_data["gnn"]
+      json_data = json.loads(text_data)
+      ID = json_data["ID"]
+      gnn = json_data["gnn"]
 
-        images = [
-            Base642Image(json_data["image_data"])
-        ]
+      images = [
+        Base642Image(json_data["image_data"])
+      ]
 
-        self.log('A0')
-        roi_results = self.roiHandler(images)
+      #testing
+      # test_array = []
+      # root = Path('./testing')
+      # for i in range(40):
+      #   k = i + 1
+      #   test_array.append(root / 'image' / f'CUBI{k:02d}.png')
+      # for i in range(10):
+      #   k = i + 1
+      #   test_array.append(root / 'image' / f'TEXT{k:02d}.png')
+      # for f in test_array:
+      #   images = [
+      #     Image.open(f)
+      #   ]
+      #   first_shape = images[0].size
 
-        self.log('A1', {
-            'name': 'roi-detection',
-            'floor': len(roi_results[0]),
-            'preds': roi_results[0]
-        })
+      self.log('A0')
+      roi_results = self.roiHandler(images)
 
-        #divide each floor
-        images_divided = []
-        for image,rois in zip(images,roi_results):
-            images_divided.append(
-                [
-                    ImageCropper(image, roi) for roi in rois
-                ]
-            )
+      self.log('A1', {
+        'name': 'roi-detection',
+        'floor': len(roi_results[0]),
+        'preds': roi_results[0]
+      })
 
-        self.log('B0')
-        symbol_detection_results = self.symbolDetectionHandler(images_divided)
+      #divide each floor
+      images_divided = []
+      for image,rois in zip(images,roi_results):
+        images_divided.append(
+          [
+            ImageCropper(image, roi) for roi in rois
+          ]
+        )
 
-        self.log('C0', {
-            'name': 'symbol-detection',
-            'preds': symbol_detection_results[0]
-        })
-        wall_segment_results = self.wallSegmentationHandler(images_divided)
+      self.log('B0')
+      symbol_detection_results = self.symbolDetectionHandler(images_divided)
 
-        # with open('segment.pkl', 'wb') as f:
-        #     pickle.dump(wall_segment_results, f)
-        # with open('symbol.pkl', 'wb') as f:
-        #     pickle.dump(symbol_detection_results, f)
+      self.log('C0', {
+        'name': 'symbol-detection',
+        'preds': symbol_detection_results[0]
+      })
+      wall_segment_results = self.wallSegmentationHandler(images_divided)
 
-        post_processor = WallPostProcessing(self)
-        for segment_results,symbol_results,images in zip(wall_segment_results, symbol_detection_results, images_divided):
-            for floor_idx,(floor_segment,symbol_bbox,image) in enumerate(zip(segment_results, symbol_results, images)):
-                floor_idx += 1
-                graph, room_poly, _, _ = post_processor(floor_segment, symbol_bbox, floor_idx)
-                self.log('D0', {
-                    'name': 'graph-construction',
-                    'floor': floor_idx,
-                    'room_poly': room_poly
-                })
-                print(room_poly)
-                x_cnn,res = spatial_classification(image, room_poly)
-                self.log('D1', self.format_image_data(
-                    name='deep-floor-plan',
-                    floor=floor_idx,
-                    image=res
-                ))
-                # text detection
-                text_bounding_box, x_text = None, None
-                self.log('D2', {
-                    'name': 'text-detection',
-                    'floor': floor_idx,
-                    'preds': text_bounding_box
-                })
-                preds = self.gnnHandler(graph, gnn, x_cnn, x_text)
-                print(np.array(Mapper.rooms)[preds.argmax(-1)])
-                self.log('E0', {
-                    'name': 'room-classification',
-                    'floor': floor_idx,
-                    'preds': preds.argmax(-1),
-                    'labels': Mapper.rooms
-                })
+      # with open('segment.pkl', 'wb') as f:
+      #     pickle.dump(wall_segment_results, f)
+      # with open('symbol.pkl', 'wb') as f:
+      #     pickle.dump(symbol_detection_results, f)
+
+      post_processor = WallPostProcessing(self)
+      # all_poly = []
+      # all_pred = []
+      # all_coords = []
+      # all_ppm = []
+      for segment_results,symbol_results,images in zip(wall_segment_results, symbol_detection_results, images_divided):
+        # al_poly = []
+        # al_pred = []
+        # al_coords = []
+        # al_ppm = []
+        for floor_idx,(floor_segment,symbol_bbox,image) in enumerate(zip(segment_results, symbol_results, images)):
+          floor_idx += 1
+          graph, room_poly, coords, coord_edges, ppm = post_processor(floor_segment, symbol_bbox, floor_idx)
+          location = []
+          # al_poly.append(room_poly)
+          # al_coords.append((coords, coord_edges))
+          # al_ppm.append(ppm)
+          for pol in room_poly:
+            pts = deepcopy(pol)
+            pts[0,:] *= image.size[1]
+            pts[1,:] *= image.size[0]
+            p = Polygon(pts.T).centroid
+            location.append([p.x / image.size[1], p.y / image.size[0]])
+
+          self.log('D0', {
+            'name': 'graph-construction',
+            'floor': floor_idx,
+            'room_poly': room_poly,
+            'x_location': location,
+            'edge': graph.edge_index.cpu().numpy(),
+            'door_edges': coord_edges
+          })
+          x_cnn,res = spatial_classification(image, room_poly)
+          self.log('D1', self.format_image_data(
+            name='deep-floor-plan',
+            floor=floor_idx,
+            image=res
+          ))
+          # text detection
+          x_text, text_bounding_box = text_detection(image, room_poly)
+          self.log('D2', {
+            'name': 'text-detection',
+            'floor': floor_idx,
+            'preds': text_bounding_box
+          })
+          preds = self.gnnHandler(graph, gnn, x_cnn, x_text)
+          self.log('E0', {
+            'name': 'room-classification',
+            'floor': floor_idx,
+            'preds': preds.argmax(-1),
+            'labels': Mapper.rooms
+          })
+          #   al_pred.append(preds.argmax(-1))
+          # all_poly.append(al_poly)
+          # all_pred.append(al_pred)
+          # all_coords.append(al_coords)
+          # all_ppm.append(al_ppm)
+        
+        # test_img = Image.new("RGB", first_shape)
+        # drawer = ImageDraw.Draw(test_img)
+        # for roi,poly,pred in zip(roi_results[0], all_poly[0], all_pred[0]):
+        #   bbox = roi['bounding_box']
+        #   for po,pr in zip(poly,pred):
+        #     color = COLOR[pr + 3]
+        #     po[0] = bbox[1] + po[0] * (bbox[3] - bbox[1])
+        #     po[1] = bbox[0] + po[1] * (bbox[2] - bbox[0])
+
+        #     plo = []
+        #     for py in po[::-1,:].astype(int).T:
+        #       plo.append((py[0], py[1]))
+
+        #     drawer.polygon(plo, outline=0, fill=color)
+        # for roi,(coords,coord_edges),ppm in zip(roi_results[0], all_coords[0], all_ppm[0]):
+        #   bbox = roi['bounding_box']
+        #   for edge in coord_edges:
+        #     for pl in edge['polygon']:
+        #       poly = []
+        #       for ar in pl:
+        #         poly.append((int(bbox[0] + ar[0] * (bbox[2] - bbox[0])), int(bbox[1] + ar[1] * (bbox[3] - bbox[1]))))
+        #       if len(poly) > 1:
+        #         drawer.polygon(poly, outline=0, fill=COLOR[0])
+
+        #     for door in edge['doors']:
+        #       poly = []
+        #       for ar in door['polygon']:
+        #         poly.append((int(bbox[0] + ar[0] * (bbox[2] - bbox[0])), int(bbox[1] + ar[1] * (bbox[3] - bbox[1]))))
+        #       if len(poly) > 1:
+        #         drawer.polygon(poly, outline=0, fill=COLOR[1])
+        #     for window in edge['windows']:
+        #       poly = []
+        #       for ar in window['polygon']:
+        #         poly.append((int(bbox[0] + ar[0] * (bbox[2] - bbox[0])), int(bbox[1] + ar[1] * (bbox[3] - bbox[1]))))
+        #       if len(poly) > 1:
+        #         drawer.polygon(poly, outline=0, fill=COLOR[2])
+        # test_img.save('test.png')
+        # test(test_img, gnn)
 
         self.disconnect(0)
 
@@ -145,8 +246,7 @@ class PredictionConsumer(WebsocketConsumer):
     
     
     def gnnHandler(self, graph: Data, model_name, x_cnn, x_text):
-        # x_compose = (x_cnn + x_text) / 2
-        x_compose = x_cnn / 2
+        x_compose = x_cnn + x_text
         return room_clasification(graph, x_compose, model_name)
 
 

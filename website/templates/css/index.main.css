@@ -1,5 +1,130 @@
 {% load static %}
 
+:root {
+  --color-0: rgb(255, 0, 0);
+  --text-color-0: rgb(255, 255, 255);
+  --color-1: rgb(0, 255, 0);
+  --text-color-0: rgb(255, 255, 255);
+  --color-2: rgb(0, 0, 255);
+  --color-3: rgb(255, 255, 0);
+  --color-4: rgb(255, 165, 0);
+  --color-5: rgb(128, 0, 128);
+  --color-6: rgb(255, 192, 203);
+  --color-7: rgb(165, 42, 42);
+  --color-8: rgb(128, 128, 128);
+  --color-9: rgb(128, 0, 0);
+  --color-10: rgb(0, 128, 0);
+  --color-11: rgb(0, 128, 128);
+  --color-12: rgb(0, 0, 128);
+  --color-13: rgb(139, 69, 19);
+  --color-14: rgb(255, 20, 147);
+  --color-15: rgb(255, 105, 180);
+  --color-16: rgb(70, 130, 180);
+  --color-17: rgb(32, 178, 170);
+  --color-18: rgb(100, 149, 237);
+  --color-19: rgb(255, 99, 71);
+  --color-20: rgb(255, 215, 0);
+  --color-21: rgb(0, 255, 255);
+  --color-22: rgb(238, 130, 238);
+}
+
+[class^="class-label-"] {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+.class-label-0 {
+  background-color: var(--color-0);
+}
+
+.class-label-1 {
+  background-color: var(--color-1);
+}
+
+.class-label-2 {
+  background-color: var(--color-2);
+}
+
+.class-label-3 {
+  background-color: var(--color-3);
+}
+
+.class-label-4 {
+  background-color: var(--color-4);
+}
+
+.class-label-5 {
+  background-color: var(--color-5);
+}
+
+.class-label-6 {
+  background-color: var(--color-6);
+}
+
+.class-label-7 {
+  background-color: var(--color-7);
+}
+
+.class-label-8 {
+  background-color: var(--color-8);
+}
+
+.class-label-9 {
+  background-color: var(--color-9);
+}
+
+.class-label-10 {
+  background-color: var(--color-10);
+}
+
+.class-label-11 {
+  background-color: var(--color-11);
+}
+
+.class-label-12 {
+  background-color: var(--color-12);
+}
+
+.class-label-13 {
+  background-color: var(--color-13);
+}
+
+.class-label-14 {
+  background-color: var(--color-14);
+}
+
+.class-label-15 {
+  background-color: var(--color-15);
+}
+
+.class-label-16 {
+  background-color: var(--color-16);
+}
+
+.class-label-17 {
+  background-color: var(--color-17);
+}
+
+.class-label-18 {
+  background-color: var(--color-18);
+}
+
+.class-label-19 {
+  background-color: var(--color-19);
+}
+
+.class-label-20 {
+  background-color: var(--color-20);
+}
+
+.class-label-21 {
+  background-color: var(--color-21);
+}
+
+.class-label-22 {
+  background-color: var(--color-22);
+}
+
 @keyframes animation-floating {
   from {
     transform: translateY(0vh);
@@ -36,4 +161,8 @@
   background: url(https://cdn.cssauthor.com/wp-content/uploads/2018/06/Bouncy-Preloader.gif?strip=all&lossy=1&resize=300%2C225&ssl=1) #21242D;
   background-repeat: no-repeat;
   background-position: center;
+}
+
+.legend {
+  width: 40vw;
 }

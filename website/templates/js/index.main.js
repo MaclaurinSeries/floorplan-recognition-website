@@ -1,3 +1,29 @@
+const rooms_label = [
+  "Outdoor",
+  "Kitchen",
+  "Dining",
+  "Bedroom",
+  "Bath",
+  "Entry",
+  "Storage",
+  "Garage",
+  "Room",
+  "LivingRoom",
+];
+const icons_label = [
+  "Door",
+  "Window",
+  "Closet",
+  "ElectricalAppliance",
+  "Toilet",
+  "Sink",
+  "SaunaBench",
+  "Fireplace",
+  "Bathtub",
+  "Chimney",
+  "Stairs",
+];
+
 let FloorplanRecognition = function (ID, current_time, components) {
   const {
     input_file_id,
@@ -8,6 +34,7 @@ let FloorplanRecognition = function (ID, current_time, components) {
     load_screen_id,
     load_bar_id,
     load_info_id,
+    button_3d_model,
   } = components;
 
   this.ID = ID;
@@ -22,6 +49,7 @@ let FloorplanRecognition = function (ID, current_time, components) {
   this.input_file = document.getElementById(input_file_id);
   this.text_holder = document.getElementById(text_holder_id);
   this.button_submit = document.getElementById(button_submit_id);
+  this.button_3d_model = document.getElementById(button_3d_model);
   this.input_panel = document.getElementById(input_panel_id);
 
   this.load_screen = document.getElementById(load_screen_id);
@@ -31,6 +59,10 @@ let FloorplanRecognition = function (ID, current_time, components) {
   this.displayed_floor = 1;
   this.floor_cnt = 1;
   this.room_poly = {};
+
+  this.polygon = [];
+  this.m_ratio = [];
+  this.graph = {};
 
   this.input_file.onchange = () => {
     let filename = String(this.input_file.value);
@@ -55,6 +87,71 @@ let FloorplanRecognition = function (ID, current_time, components) {
     }
   };
 
+  this.button_3d_model.onclick = async () => {
+    if (this.polygon.length <= 0) {
+      return;
+    }
+    if (this.in_progress) {
+      return;
+    }
+    const form_data = new FormData();
+    console.log(this.polygon);
+    form_data.append("polygon", JSON.stringify(this.polygon));
+    form_data.append("graph", JSON.stringify(this.graph));
+    // console.log(body_data);
+    fetch("/", {
+      method: "POST",
+      body: form_data,
+    })
+      .then((res) => {
+        return res.text();
+      })
+      .then((res) => {
+        let script;
+        let win = window.open("");
+        win.document.body.outerHTML = res;
+        win.document.title = "3D Model";
+
+        let link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href =
+          "https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css";
+        link.integrity =
+          "sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm";
+        link.crossOrigin = "anonymous";
+        win.document.head.appendChild(link);
+
+        script = win.document.createElement("script");
+        script.innerHTML = `window.__polygon = Object.freeze(JSON.parse('${JSON.stringify(
+          this.polygon
+        )}'));
+                            window.__graph = Object.freeze(JSON.parse('${JSON.stringify(
+                              this.graph
+                            )}'));`;
+        script.id = "simulation-data";
+        win.document.body.appendChild(script);
+
+        for (let link of [
+          "https://code.jquery.com/jquery-3.2.1.slim.min.js",
+          "https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js",
+          "https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js",
+        ]) {
+          script = win.document.createElement("script");
+          win.document.body.appendChild(script);
+          script.type = "text/javascript";
+          script.src = link;
+        }
+
+        script = win.document.createElement("script");
+        win.document.body.appendChild(script);
+        script.type = "module";
+        script.addEventListener("load", function (e) {
+          win.initialization(win.__polygon, win.__graph);
+        });
+        script.src = `http://${window.location.host}/static/js/three.main.js`;
+      });
+  };
+
   this.button_submit.onclick = async () => {
     if (!this.is_valid_image) {
       return;
@@ -62,7 +159,6 @@ let FloorplanRecognition = function (ID, current_time, components) {
     if (this.in_progress) {
       return;
     }
-
     this.in_progress = true;
 
     const opacity_up = [{ opacity: "0.0" }, { opacity: "1.0" }];
@@ -82,23 +178,67 @@ let FloorplanRecognition = function (ID, current_time, components) {
       img.src = "";
     }
     await this.sendImage();
+  };
 
-    const load_bar_promise = this.load_bar.animate(
-      opacity_down,
-      animation_timing
-    ).finished;
-    const load_info_promise = this.load_info.animate(
-      opacity_down,
-      animation_timing
-    ).finished;
+  this.setLoadStatus = async (load_info) => {
+    const { percentage, info } = load_info;
+    const current = this.load_bar.style.width;
+    const next = String(percentage) + "%";
 
-    await load_bar_promise, load_info_promise;
+    const stretch_bar = [{ width: current }, { width: next }];
+    const animation_timing = {
+      duration: 300,
+      iterations: 1,
+      easing: "ease",
+    };
 
-    this.in_progress = false;
-    this.load_bar.style.width = "0%";
+    this.load_info.innerHTML = info;
+    this.load_bar.style.width = next;
+    await this.load_bar.animate(stretch_bar, animation_timing).finished;
+  };
 
-    this.load_bar.style.opacity = "0.0";
-    this.load_info.style.opacity = "0.0";
+  this.changeState = async (opacity_up, opacity_down, animation_timing) => {
+    this.opacity_up = opacity_up;
+    this.opacity_down = opacity_down;
+    this.animation_timing = animation_timing;
+    if (!this.first_state) return;
+
+    this.first_state = false;
+
+    this.load_screen.setAttribute(
+      "style",
+      "visibility: visible; display: inline;"
+    );
+    await this.load_screen.animate(opacity_up, animation_timing).finished;
+
+    const map_obj = {
+      "row-span-2": "",
+      "w-sm": "w-full",
+      "grid-rows-2": "grid-rows-1",
+      "my-auto": "my-4",
+    };
+
+    let class_name = this.input_panel.className;
+    class_name = class_name.replace(
+      /((row\-span\-2)|(w\-sm)|(grid\-rows\-2)|(my\-auto))/g,
+      (match) => {
+        return map_obj[match];
+      }
+    );
+
+    this.input_panel.className = class_name;
+
+    this.text_holder.style.display = "none";
+    this.text_holder.style.visibility = "visible";
+
+    document.getElementById("panel-holder").style.visibility = "visible";
+    document.getElementById("panel-holder").style.display = "inline";
+
+    await this.load_screen.animate(opacity_down, animation_timing).finished;
+    this.load_screen.setAttribute(
+      "style",
+      "visibility: hidden; display: none;"
+    );
   };
 
   this.sendImage = async () => {
@@ -181,6 +321,24 @@ let FloorplanRecognition = function (ID, current_time, components) {
     };
   };
 
+  this.endLoadingBar = async () => {
+    const load_bar_promise = this.load_bar.animate(
+      this.opacity_down,
+      this.animation_timing
+    ).finished;
+    const load_info_promise = this.load_info.animate(
+      this.opacity_down,
+      this.animation_timing
+    ).finished;
+
+    await load_bar_promise, load_info_promise;
+
+    this.load_bar.style.width = "0%";
+
+    this.load_bar.style.opacity = "0.0";
+    this.load_info.style.opacity = "0.0";
+  };
+
   this.messageHandler = (PID, percentage, info, data) => {
     const image_pid = ["C1", "C2", "D1"];
 
@@ -201,6 +359,7 @@ let FloorplanRecognition = function (ID, current_time, components) {
       this.putImage(0, "roi-detection", this.image, null, polygon);
 
       this.crop_size = [];
+      this.polygon = [];
       for (let i = 0; i < this.floor_cnt; i++) {
         let x = picked[i].map((e) => e[0]);
         let y = picked[i].map((e) => e[1]);
@@ -210,18 +369,19 @@ let FloorplanRecognition = function (ID, current_time, components) {
           Math.max(...x),
           Math.max(...y),
         ]);
+        this.polygon.push({});
+        this.m_ratio.push(-1);
       }
     } else if (PID == "C0") {
-      // ini hasil symbol detection
       const { name, preds } = data;
       for (let i = 0; i < this.floor_cnt; i++) {
         let picked = preds[i];
 
         const polygon = {};
+        for (let name of icons_label) {
+          polygon[name] = [];
+        }
         for (let pred of picked) {
-          if (!(pred["names"] in polygon)) {
-            polygon[pred["names"]] = [];
-          }
           let bboxn = pred["bounding_box_n"];
           let bbox = [
             [bboxn[0], bboxn[1]],
@@ -244,93 +404,42 @@ let FloorplanRecognition = function (ID, current_time, components) {
     } else if (PID == "C3") {
       const { name, floor, coords, edges, res } = data;
 
+      const wall = edges.reduce((next, prev) => {
+        return next.concat(prev["polygon"]);
+      }, []);
+      const door = edges.reduce((next, prev) => {
+        return next.concat(prev["doors"].map((x) => x["polygon"]));
+      }, []);
+      const window = edges.reduce((next, prev) => {
+        return next.concat(prev["windows"].map((x) => x["polygon"]));
+      }, []);
+      this.m_ratio[floor - 1] = res["ppm"] / res["shape"][0];
+
       this.putImage(
         floor,
         "vectorization",
         this.image,
         null,
         {
-          wall: [
-            edges.map((x) => {
-              return [
-                [
-                  coords[2 * x["vertices"][0] + 1],
-                  coords[2 * x["vertices"][0]],
-                ],
-                [
-                  coords[2 * x["vertices"][1] + 1],
-                  coords[2 * x["vertices"][1]],
-                ],
-                x["thickness_meter"],
-              ];
-            }),
-          ],
-          door: [
-            edges
-              .map((x) => {
-                let x1 = coords[2 * x["vertices"][0] + 1];
-                let y1 = coords[2 * x["vertices"][0]];
-                let x2 = coords[2 * x["vertices"][1] + 1];
-                let y2 = coords[2 * x["vertices"][1]];
-
-                let doors = x["doors"].map((door) => {
-                  let xx = door["projection"] * (x2 - x1) + x1;
-                  let yy = door["projection"] * (y2 - y1) + y1;
-
-                  let vector = [x2 - x1, y2 - y1];
-
-                  return [
-                    [xx, yy],
-                    vector,
-                    door["length"],
-                    x["thickness_meter"],
-                  ];
-                });
-
-                return doors;
-              })
-              .filter((x) => x.length > 0)
-              .map((x) => x[0]),
-          ],
-          window: [
-            edges
-              .map((x) => {
-                let x1 = coords[2 * x["vertices"][0] + 1];
-                let y1 = coords[2 * x["vertices"][0]];
-                let x2 = coords[2 * x["vertices"][1] + 1];
-                let y2 = coords[2 * x["vertices"][1]];
-
-                let doors = x["windows"].map((door) => {
-                  let xx = door["projection"] * (x2 - x1) + x1;
-                  let yy = door["projection"] * (y2 - y1) + y1;
-
-                  let vector = [x2 - x1, y2 - y1];
-                  let norm = Math.sqrt(
-                    vector[0] * vector[0] + vector[1] * vector[1]
-                  );
-                  vector[0] /= norm;
-                  vector[1] /= norm;
-
-                  return [
-                    [xx, yy],
-                    vector,
-                    door["length"],
-                    x["thickness_meter"],
-                  ];
-                });
-
-                return doors;
-              })
-              .filter((x) => x.length > 0)
-              .map((x) => x[0]),
-          ],
+          "0_wall": wall,
+          "1_door": door,
+          "2_window": window,
         },
         this.crop_size[floor - 1],
-        true,
-        res["ppm"] / res["shape"][0]
+        "full",
+        this.m_ratio[floor - 1]
       );
+
+      this.polygon[floor - 1]["wall"] = wall;
+      this.polygon[floor - 1]["door"] = door;
+      this.polygon[floor - 1]["window"] = window;
+      this.polygon[floor - 1]["m_ratio"] = this.m_ratio[floor - 1];
+      this.polygon[floor - 1]["wh_ratio"] =
+        (this.crop_size[floor - 1][2] - this.crop_size[floor - 1][0]) /
+        (this.crop_size[floor - 1][3] - this.crop_size[floor - 1][1]);
     } else if (PID == "D0") {
-      const { name, floor, room_poly } = data;
+      const { name, floor, room_poly, x_location, edge, door_edges } = data;
+
       const rooms = [];
       for (const room of room_poly) {
         const transpose = [];
@@ -342,23 +451,77 @@ let FloorplanRecognition = function (ID, current_time, components) {
           pred: -1,
         });
       }
-      this.room_poly[floor] = rooms;
+      this.room_poly[floor - 1] = rooms;
+      this.graph = {
+        x: x_location,
+        edge: edge,
+      };
+
+      const door = door_edges.reduce((next, prev) => {
+        return next.concat(prev["doors"].map((x) => x["polygon"]));
+      }, []);
+      const connection = door_edges.reduce((next, prev) => {
+        return next.concat(prev["doors"].map((x) => x["connection"]));
+      }, []);
+      this.polygon[floor - 1]["door"] = door;
+      this.polygon[floor - 1]["connection"] = connection;
+      this.polygon[floor - 1]["room_center"] = x_location;
+
+      const poly = {};
+      poly["room"] = [];
+      for (let rpl of rooms) {
+        poly["room"].push(rpl.polygon);
+      }
+
+      this.putImage(
+        floor,
+        "graph-construction",
+        this.image,
+        null,
+        poly,
+        this.crop_size[floor - 1],
+        "graph",
+        null,
+        this.graph
+      );
+    } else if (PID == "D2") {
+      const { name, floor, preds } = data;
+      let picked = preds;
+
+      const polygon = {};
+      for (let pred of picked) {
+        if (!("text" in polygon)) {
+          polygon["text"] = [];
+        }
+        let bboxn = pred["bbox"];
+        polygon["text"].push(bboxn);
+      }
+
+      this.putImage(
+        floor,
+        "text-detection",
+        this.image,
+        null,
+        polygon,
+        this.crop_size[floor - 1]
+      );
     } else if (PID == "E0") {
       const { name, floor, preds, labels } = data;
 
       this.labels = labels;
       const poly = {};
 
-      for (let i = 0; i < preds.length; i++) {
-        const obj = this.room_poly[floor][i].polygon;
-        this.room_poly[floor][i].pred = preds[i];
-
-        if (!poly[preds[i]]) {
-          poly[preds[i]] = [];
-        }
-
-        poly[preds[i]].push(obj);
+      for (let room of rooms_label) {
+        poly[room] = [];
       }
+      for (let i = 0; i < preds.length; i++) {
+        const obj = this.room_poly[floor - 1][i].polygon;
+        this.room_poly[floor - 1][i].pred = preds[i];
+
+        poly[rooms_label[preds[i]]].push(obj);
+      }
+
+      this.polygon[floor - 1]["room"] = this.room_poly[floor - 1];
 
       this.putImage(
         floor,
@@ -368,65 +531,12 @@ let FloorplanRecognition = function (ID, current_time, components) {
         poly,
         this.crop_size[floor - 1]
       );
-    }
-  };
 
-  this.setLoadStatus = async (load_info) => {
-    const { percentage, info } = load_info;
-    const current = this.load_bar.style.width;
-    const next = String(percentage) + "%";
-
-    const stretch_bar = [{ width: current }, { width: next }];
-    const animation_timing = {
-      duration: 300,
-      iterations: 1,
-      easing: "ease",
-    };
-
-    this.load_info.innerHTML = info;
-    this.load_bar.style.width = next;
-    await this.load_bar.animate(stretch_bar, animation_timing).finished;
-  };
-
-  this.changeState = async (opacity_up, opacity_down, animation_timing) => {
-    if (!this.first_state) return;
-
-    this.first_state = false;
-
-    this.load_screen.setAttribute(
-      "style",
-      "visibility: visible; display: inline;"
-    );
-    await this.load_screen.animate(opacity_up, animation_timing).finished;
-
-    const map_obj = {
-      "row-span-2": "",
-      "w-sm": "w-full",
-      "grid-rows-2": "grid-rows-1",
-      "my-auto": "my-4",
-    };
-
-    let class_name = this.input_panel.className;
-    class_name = class_name.replace(
-      /((row\-span\-2)|(w\-sm)|(grid\-rows\-2)|(my\-auto))/g,
-      (match) => {
-        return map_obj[match];
+      if (floor == this.floor_cnt) {
+        this.in_progress = false;
+        this.endLoadingBar();
       }
-    );
-
-    this.input_panel.className = class_name;
-
-    this.text_holder.style.display = "none";
-    this.text_holder.style.visibility = "visible";
-
-    document.getElementById("panel-holder").style.visibility = "visible";
-    document.getElementById("panel-holder").style.display = "inline";
-
-    await this.load_screen.animate(opacity_down, animation_timing).finished;
-    this.load_screen.setAttribute(
-      "style",
-      "visibility: hidden; display: none;"
-    );
+    }
   };
 
   this.putImage = (
@@ -436,8 +546,9 @@ let FloorplanRecognition = function (ID, current_time, components) {
     fill = null,
     polygon = null,
     crop = null,
-    line_independence = false,
-    ppm = null
+    mode = "transparent",
+    ppm = null,
+    graph = null
   ) => {
     let img = document.createElement("img");
     img.onload = (e) => {
@@ -500,13 +611,22 @@ let FloorplanRecognition = function (ID, current_time, components) {
           const rgb = commonColors[color_index];
           color_index++;
 
-          let fill_color = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.3)`;
-          let stroke_color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+          let fill_color, stroke_color;
+          if (mode == "transparent" || mode == "graph") {
+            fill_color = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.3)`;
+            stroke_color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+          } else if (mode == "full") {
+            fill_color = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1.0)`;
+            stroke_color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`;
+            if (cls == "0_wall") {
+              fill_color = `rgba(0,0,0, 1.0)`;
+            }
+          }
 
           for (let i = 0; i < polygon[cls].length; i++) {
             const poly = polygon[cls][i];
 
-            if (line_independence) {
+            if (mode == "line") {
               if (first_clear) {
                 ctx.fillStyle = "rgb(127, 127, 127)";
                 ctx.fillRect(0, 0, vw40, vw40);
@@ -549,7 +669,16 @@ let FloorplanRecognition = function (ID, current_time, components) {
                   ctx.stroke();
                 }
               }
-            } else {
+            } else if (
+              mode == "transparent" ||
+              mode == "full" ||
+              mode == "graph"
+            ) {
+              if (first_clear && mode == "full") {
+                ctx.fillStyle = "rgb(127, 127, 127)";
+                ctx.fillRect(0, 0, vw40, vw40);
+                first_clear = false;
+              }
               let first = true;
               ctx.beginPath();
               for (let [u, v] of poly) {
@@ -563,13 +692,48 @@ let FloorplanRecognition = function (ID, current_time, components) {
                 }
               }
               ctx.closePath();
-              ctx.strokeStyle = stroke_color;
               ctx.fillStyle = fill_color;
-              ctx.lineWidth = 3;
               ctx.fill();
-              ctx.stroke();
+              if (mode != "full") {
+                ctx.strokeStyle = stroke_color;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+              }
             }
           }
+        }
+      }
+      if (mode == "graph") {
+        const { x, edge } = graph;
+        console.log(x, edge);
+        for (let i = 0; i < edge[0].length; i++) {
+          const first = x[edge[0][i]];
+          const second = x[edge[1][i]];
+
+          ctx.beginPath();
+          ctx.moveTo(first[1] * neww + stx, first[0] * newh + sty);
+          ctx.lineTo(second[1] * neww + stx, second[0] * newh + sty);
+          ctx.closePath();
+
+          ctx.strokeStyle = "blue";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+        for (const loc of x) {
+          ctx.beginPath();
+          ctx.arc(
+            loc[1] * neww + stx,
+            loc[0] * newh + sty,
+            7,
+            2 * Math.PI,
+            false
+          );
+          ctx.closePath();
+          ctx.fillStyle = "green";
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "#003300";
+          ctx.stroke();
         }
       }
 
@@ -620,6 +784,7 @@ document.body.onload = () => {
     load_bar_id: "loading-bar",
     load_info_id: "loading-info",
     text_holder_id: "text-holder",
+    button_3d_model: "btn-3d-model",
   });
 };
 

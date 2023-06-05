@@ -43,8 +43,6 @@ class Model(pl.LightningModule):
             edge_index=edge_index,
             edge_attr=edge_attr
         )
-
-        # print(y_hat.shape, y.shape)
         
         loss = F.cross_entropy(y_hat, y)
         accuracy = self.train_acc(y_hat.softmax(dim=-1), y.argmax(dim=-1))

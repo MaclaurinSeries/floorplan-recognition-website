@@ -1,0 +1,37 @@
+svg {
+  fill: #000000;
+  stroke: #000000;
+}
+
+text,
+.WalkinLine path {
+  display: none;
+}
+
+.Wall .Door .Threshold {
+  stroke-width: 0;
+  fill: %%COLOR[0]%%;
+  stroke: %%COLOR[0]%%;
+}
+
+.Wall .Door,
+.Wall .Door .Panel,
+.Wall .Door .PanelArea {
+  stroke-width: 0;
+  fill: none;
+  stroke: none;
+}
+
+.Railing,
+.Column,
+.Wall {
+  fill: %%COLOR[1]%%;
+  stroke: %%COLOR[1]%%;
+}
+
+.Wall .Window,
+.Wall .Window .Glass,
+.Wall .Window .Panel {
+  fill: %%COLOR[2]%%;
+  stroke: %%COLOR[2]%%;
+}

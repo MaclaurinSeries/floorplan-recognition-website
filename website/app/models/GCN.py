@@ -16,8 +16,8 @@ class Model(pl.LightningModule):
         self.learning_rate = learning_rate
         super().__init__()
         self.gnn = GCN(in_channels, hidden_channels, num_layers,
-                             out_channels, dropout=dropout,
-                             norm=BatchNorm1d(hidden_channels))
+                        out_channels, dropout=dropout,
+                        norm=BatchNorm1d(hidden_channels))
 
         self.train_acc = Accuracy(task='multiclass', num_classes=out_channels)
         self.val_acc = Accuracy(task='multiclass', num_classes=out_channels)
@@ -43,8 +43,6 @@ class Model(pl.LightningModule):
             edge_index=edge_index,
             edge_attr=edge_attr
         )
-
-        # print(y_hat.shape, y.shape)
         
         loss = F.cross_entropy(y_hat, y)
         accuracy = self.train_acc(y_hat.softmax(dim=-1), y.argmax(dim=-1))

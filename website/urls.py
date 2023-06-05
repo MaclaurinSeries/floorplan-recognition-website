@@ -22,5 +22,5 @@ from .views import (
 )
 
 urlpatterns = [
-    path('', Index.main, name='index')
+    path('', Index.main, name='url')
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

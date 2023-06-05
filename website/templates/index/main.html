@@ -91,6 +91,13 @@
             >
               Floor-1
             </button>
+            <button
+              type="button"
+              id="btn-3d-model"
+              class="inline-flex w-lg justify-center rounded-lg bg-slate-800 border-slate-600 px-5 p-3.5 text-sm font-semibold text-white mx-auto hover:bg-slate-700 border-gray-300 float-right"
+            >
+              3D Model
+            </button>
           </div>
           <div id="Floor-1">
             <div class="flex flex-row gap-8 mb-4">
@@ -101,6 +108,85 @@
                   alt=""
                   class="image-panel rounded-lg symbol-detection"
                 />
+                <div class="flex flex-wrap justify-evenly pb-5 legend">
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-0)"
+                    ></div>
+                    <div class="pl-1 pr-4">Door</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-1)"
+                    ></div>
+                    <div class="pl-1 pr-4">Window</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-2)"
+                    ></div>
+                    <div class="pl-1 pr-4">Closet</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-3)"
+                    ></div>
+                    <div class="pl-1 pr-4">ElectricalAppliance</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-4)"
+                    ></div>
+                    <div class="pl-1 pr-4">Toilet</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-5)"
+                    ></div>
+                    <div class="pl-1 pr-4">Sink</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-6)"
+                    ></div>
+                    <div class="pl-1 pr-4">SaunaBench</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-7)"
+                    ></div>
+                    <div class="pl-1 pr-4">Fireplace</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-8)"
+                    ></div>
+                    <div class="pl-1 pr-4">Bathtub</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-9)"
+                    ></div>
+                    <div class="pl-1 pr-4">Chimney</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-10)"
+                    ></div>
+                    <div class="pl-1 pr-4">Stairs</div>
+                  </div>
+                </div>
               </div>
               <div class="flex flex-col relative">
                 <h6>Segmentation Result</h6>
@@ -123,9 +209,33 @@
                   alt=""
                   class="image-panel rounded-lg vectorization"
                 />
+                <div class="flex flex-wrap justify-evenly pb-5 legend">
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-1)"
+                    ></div>
+                    <div class="pl-1 pr-4">Door</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-2)"
+                    ></div>
+                    <div class="pl-1 pr-4">Window</div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="flex flex-row gap-8 mb-4">
+              <div class="flex flex-col relative">
+                <h6>Graph Construction</h6>
+                <img
+                  src=""
+                  alt=""
+                  class="image-panel rounded-lg graph-construction"
+                />
+              </div>
               <div class="flex flex-col relative">
                 <h6>Deep FloorPlan</h6>
                 <img
@@ -134,6 +244,8 @@
                   class="image-panel rounded-lg deep-floor-plan"
                 />
               </div>
+            </div>
+            <div class="flex flex-row gap-8 mb-4">
               <div class="flex flex-col relative">
                 <h6>Text Detection</h6>
                 <img
@@ -142,8 +254,6 @@
                   class="image-panel rounded-lg text-detection"
                 />
               </div>
-            </div>
-            <div class="flex flex-row gap-8 mb-4">
               <div class="flex flex-col relative">
                 <h6>Room Classification</h6>
                 <img
@@ -151,10 +261,78 @@
                   alt=""
                   class="image-panel rounded-lg room-classification"
                 />
-              </div>
-              <div class="flex flex-col relative">
-                <h6>3D building model</h6>
-                <img src="" alt="" class="image-panel rounded-lg 3d-model" />
+                <div class="flex flex-wrap justify-evenly pb-5 legend">
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-0)"
+                    ></div>
+                    <div class="pl-1 pr-4">Outdoor</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-1)"
+                    ></div>
+                    <div class="pl-1 pr-4">Kitchen</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-2)"
+                    ></div>
+                    <div class="pl-1 pr-4">Dining</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-3)"
+                    ></div>
+                    <div class="pl-1 pr-4">Bedroom</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-4)"
+                    ></div>
+                    <div class="pl-1 pr-4">Bath</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-5)"
+                    ></div>
+                    <div class="pl-1 pr-4">Entry</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-6)"
+                    ></div>
+                    <div class="pl-1 pr-4">Storage</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-7)"
+                    ></div>
+                    <div class="pl-1 pr-4">Garage</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-8)"
+                    ></div>
+                    <div class="pl-1 pr-4">Room</div>
+                  </div>
+                  <div class="flex flex-row">
+                    <div
+                      class="px-3"
+                      style="background-color: var(--color-9)"
+                    ></div>
+                    <div class="pl-1 pr-4">LivingRoom</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
